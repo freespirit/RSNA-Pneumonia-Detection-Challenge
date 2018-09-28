@@ -37,3 +37,18 @@ sns.distplot(points['x'], kde=False, color="b", ax=axes[0,0])
 sns.distplot(points['y'], kde=False, color="b", ax=axes[0,1])
 sns.scatterplot(x = "x", y = "y", data = points, ax=axes[1,0])
 sns.kdeplot(points['x'], points['y'], shade=True, ax=axes[1,1])
+
+
+#%%
+widths = positive_samples['width']
+heights = positive_samples['height']
+
+f, axes = plt.subplots(1, 2, figsize = (10, 5), sharey=True)
+axes[0].set_title('width distribution')
+axes[1].set_title('height distribution')
+sns.distplot(widths, kde=False, ax=axes[0])
+sns.distplot(heights, kde=False, ax=axes[1])
+
+f, axes = plt.subplots(1, 1, figsize = (5, 5))
+axes.set_title('area distribution')
+sns.distplot(widths*heights, kde=False)
