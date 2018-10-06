@@ -39,16 +39,18 @@ sns.scatterplot(x = "x", y = "y", data = points, ax=axes[1,0])
 sns.kdeplot(points['x'], points['y'], shade=True, ax=axes[1,1])
 
 
-#%%
+# %%
 widths = positive_samples['width']
 heights = positive_samples['height']
 
-f, axes = plt.subplots(1, 2, figsize = (10, 5), sharey=True)
+_, axes = plt.subplots(1, 2, figsize = (10, 5), sharey=True)
 axes[0].set_title('width distribution')
 axes[1].set_title('height distribution')
 sns.distplot(widths, kde=False, ax=axes[0])
 sns.distplot(heights, kde=False, ax=axes[1])
 
-f, axes = plt.subplots(1, 1, figsize = (5, 5))
-axes.set_title('area distribution')
-sns.distplot(widths*heights, kde=False)
+_, axes = plt.subplots(1, 2, figsize = (10, 5))
+axes[0].set_title('area distribution')
+axes[1].set_title('ratio distribution')
+sns.distplot(widths*heights, kde=False, ax=axes[0])
+sns.distplot(heights/widths, kde=False, ax=axes[1])
