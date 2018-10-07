@@ -5,33 +5,6 @@ def make_3layer_name(base):
     return f"{base}a", f"{base}b", f"{base}c"
 
 
-def residual_identity_block(inputs, filters, base_layer_name):
-    """
-    A residual block with identity shortcut. This block simply connects (via an addition operation) the input with the
-    result of the internal convolutional layers
-    """
-    shortcut = inputs
-
-    l1, l2, l3 = make_3layer_name(base_layer_name)
-
-    prev = inputs
-    prev = tf.layers.conv2d(prev, filters[0], kernel_size=1, strides=1, padding='valid', name=l1)
-    prev = tf.layers.batch_normalization(prev, name=f"{l1}_bn")
-    prev = tf.nn.relu(prev, name=f"{l1}_relu")
-
-    prev = tf.layers.conv2d(prev, filters[1], kernel_size=3, strides=1, padding='same', name=l2)
-    prev = tf.layers.batch_normalization(prev, name=f"{l2}_bn")
-    prev = tf.nn.relu(prev, name=f"{l2}_relu")
-
-    prev = tf.layers.conv2d(prev, filters[2], kernel_size=1, strides=1, padding='valid', name=l3)
-    prev = tf.layers.batch_normalization(prev, name=f"{l3}_bn")
-
-    output = tf.add(shortcut, prev, name=f"{base_layer_name}_shortcut")
-    output = tf.nn.relu(output, name=f"{base_layer_name}_relu")
-
-    return output
-
-
 def normalized_conv2d(inputs, filters, kernel_size, stride, padding='valid', name=""):
     conv = tf.layers.conv2d(inputs, filters, kernel_size, stride, padding, name=name)
     norm = tf.layers.batch_normalization(conv, name=f"{name}_bn")
@@ -41,8 +14,27 @@ def normalized_conv2d(inputs, filters, kernel_size, stride, padding='valid', nam
 def normalized_conv2d_with_relu(inputs, filters, kernel_size, stride, padding='valid', name=""):
     conv = tf.layers.conv2d(inputs, filters, kernel_size, stride, padding, name=name)
     norm = tf.layers.batch_normalization(conv, name=f"{name}_bn")
-    relu = tf.nn.relu(norm)
+    relu = tf.nn.relu(norm, name=f"{name}_relu")
     return relu
+
+
+def residual_identity_block(inputs, filters, base_layer_name):
+    """
+    A residual block with identity shortcut. This block simply connects (via an addition operation) the input with the
+    result of the internal convolutional layers
+    """
+    shortcut = inputs
+
+    l1, l2, l3 = make_3layer_name(base_layer_name)
+
+    prev = normalized_conv2d_with_relu(inputs, filters[0], kernel_size=1, strides=1, padding='valid', name=l1)
+    prev = normalized_conv2d_with_relu(prev, filters[1], kernel_size=3, strides=1, padding='same', name=l2)
+    prev = normalized_conv2d(prev, filters[2], kernel_size=1, strides=1, padding='valid', name=l3)
+
+    output = tf.add(shortcut, prev, name=f"{base_layer_name}_shortcut")
+    output = tf.nn.relu(output, name=f"{base_layer_name}_relu")
+
+    return output
 
 
 def residual_conv_block(inputs, filters, base_layer_name, s=2):
@@ -55,17 +47,9 @@ def residual_conv_block(inputs, filters, base_layer_name, s=2):
 
     l1, l2, l3 = make_3layer_name(base_layer_name)
 
-    prev = inputs
-    prev = tf.layers.conv2d(prev, filters[0], kernel_size=1, strides=s, padding='valid', name=l1)
-    prev = tf.layers.batch_normalization(prev, name=f"{l1}_bn")
-    prev = tf.nn.relu(prev, name=f"{l1}_relu")
-
-    prev = tf.layers.conv2d(prev, filters[1], kernel_size=3, strides=1, padding='same', name=l2)
-    prev = tf.layers.batch_normalization(prev, name=f"{l2}_bn")
-    prev = tf.nn.relu(prev, name=f"{l2}_relu")
-
-    prev = tf.layers.conv2d(prev, filters[2], kernel_size=1, strides=1, padding='valid', name=l3)
-    prev = tf.layers.batch_normalization(prev, name=f"{l3}_bn")
+    prev = normalized_conv2d_with_relu(inputs, filters[0], kernel_size=1, strides=s, padding='valid', name=l1)
+    prev = normalized_conv2d_with_relu(prev, filters[1], kernel_size=3, strides=1, padding='same', name=l2)
+    prev = normalized_conv2d(prev, filters[2], kernel_size=1, strides=1, padding='valid', name=l3)
 
     output = tf.add(shortcut, prev, name=f"{base_layer_name}_add")
     output = tf.nn.relu(output, name=f"{base_layer_name}_relu")
@@ -73,7 +57,7 @@ def residual_conv_block(inputs, filters, base_layer_name, s=2):
     return output
 
 
-def resnet_building_block(inputs, filters, blocks, base_layer_name):
+def residual_block(inputs, filters, blocks, base_layer_name):
     with tf.name_scope(base_layer_name):
         prev = residual_conv_block(inputs, filters, f"{base_layer_name}_1", s=2)
         for i in range(1, blocks):
@@ -90,10 +74,10 @@ def resnet_101(inputs, classes):
         c1 = tf.layers.max_pooling2d(c1, pool_size=3, strides=2)
 
     with tf.name_scope("residual"):
-        c2 = resnet_building_block(c1, base_layer_name="conv2", blocks=3, filters=[64, 64, 256])
-        c3 = resnet_building_block(c2, base_layer_name="conv3", blocks=4, filters=[128, 128, 512])
-        c4 = resnet_building_block(c3, base_layer_name="conv4", blocks=23, filters=[256, 256, 1024])
-        c5 = resnet_building_block(c4, base_layer_name="conv5", blocks=3, filters=[512, 512, 2048])
+        c2 = residual_block(c1, base_layer_name="conv2", blocks=3, filters=[64, 64, 256])
+        c3 = residual_block(c2, base_layer_name="conv3", blocks=4, filters=[128, 128, 512])
+        c4 = residual_block(c3, base_layer_name="conv4", blocks=23, filters=[256, 256, 1024])
+        c5 = residual_block(c4, base_layer_name="conv5", blocks=3, filters=[512, 512, 2048])
 
     with tf.name_scope("common"):
         avg = tf.layers.average_pooling2d(inputs=c5, pool_size=2, strides=1)
