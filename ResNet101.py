@@ -5,14 +5,14 @@ def make_3layer_name(base):
     return f"{base}a", f"{base}b", f"{base}c"
 
 
-def normalized_conv2d(inputs, filters, kernel_size, stride, padding='valid', name=""):
-    conv = tf.layers.conv2d(inputs, filters, kernel_size, stride, padding, name=name)
+def normalized_conv2d(inputs, filters, kernel_size, strides, padding='valid', name=""):
+    conv = tf.layers.conv2d(inputs, filters, kernel_size, strides, padding, name=name)
     norm = tf.layers.batch_normalization(conv, name=f"{name}_bn")
     return norm
 
 
-def normalized_conv2d_with_relu(inputs, filters, kernel_size, stride, padding='valid', name=""):
-    conv = tf.layers.conv2d(inputs, filters, kernel_size, stride, padding, name=name)
+def normalized_conv2d_with_relu(inputs, filters, kernel_size, strides, padding='valid', name=""):
+    conv = tf.layers.conv2d(inputs, filters, kernel_size, strides, padding, name=name)
     norm = tf.layers.batch_normalization(conv, name=f"{name}_bn")
     relu = tf.nn.relu(norm, name=f"{name}_relu")
     return relu
@@ -85,6 +85,3 @@ def resnet_101(inputs, classes):
         dense = tf.layers.dense(inputs=flat, units=classes, name='fc')
 
     return (c2, c3, c4, c5), dense
-
-# TODO consider image augmentation as in the ResNet paper section 3.4 Implementation
-# TODO use weight decay of 0.0001 and momentum of 0.9
