@@ -45,7 +45,6 @@ def class_subnet(input_layer, num_anchors, num_classes, prior=0.01):
                               bias_initializer=bias_initializer,
                               kernel_initializer=kernel_intializer)
     output = tf.nn.sigmoid(output)
-
     return tf.layers.flatten(output)
 
 
@@ -68,7 +67,6 @@ def box_subnet(input_layer, num_anchors):
                               bias_initializer=bias_initializer,
                               kernel_initializer=kernel_initializer)
     output = tf.nn.sigmoid(output)
-
     return tf.layers.flatten(output)
 
 
@@ -173,16 +171,11 @@ def retina_loss(outputs, target_class, target_box, num_classes=1):
     for predictions in outputs:
         class_outputs, box_outputs = predictions
 
-        # print(class_outputs)
-        # print(target_class)
-        shape = [-1, class_outputs.get_shape().as_list()[1]]
-        target = tf.broadcast_to(target_class, shape)
+        target = tf.broadcast_to(target_class, tf.shape(class_outputs))
         # print(target)
         class_losses.append(class_loss(class_outputs, target, 1))
 
-        # print(box_outputs)
-        shape = [-1, box_outputs.get_shape().as_list()[1]]
-        target = tf.broadcast_to(target_box, shape)
+        target = tf.broadcast_to(target_box, tf.shape(box_outputs))
         # print(target)
         box_losses.append(bbox_loss(box_outputs, target, 1))
 
