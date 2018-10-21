@@ -10,7 +10,7 @@ FEATURE_MAPS_FILTERS = 256
 SUBNET_FILTERS = 256
 
 
-def fpn_top_down_layer(top, left):
+def _fpn_top_down_layer(top, left):
     """
     A layer in the top-down branch of a Feature Pyramid Network.
     Based on "Feature Pyramid Networks for Object Detection" (arXiv:1612.03144v2 [cs.CV] 19 Apr 2017)
@@ -26,7 +26,7 @@ def fpn_top_down_layer(top, left):
     return output
 
 
-def class_subnet(input_layer, num_anchors, num_classes, prior=0.01):
+def _class_subnet(input_layer, num_anchors, num_classes, prior=0.01):
     bias_initializer = tf.zeros_initializer()
     kernel_intializer = tf.random_normal_initializer(stddev=0.01)
     layer = input_layer
@@ -50,7 +50,7 @@ def class_subnet(input_layer, num_anchors, num_classes, prior=0.01):
     return tf.layers.flatten(output)
 
 
-def box_subnet(input_layer, num_anchors):
+def _box_subnet(input_layer, num_anchors):
     bias_initializer = tf.zeros_initializer()
     kernel_initializer = tf.random_normal_initializer(stddev=0.01)
     layer = input_layer
@@ -72,7 +72,7 @@ def box_subnet(input_layer, num_anchors):
     return tf.layers.flatten(output)
 
 
-def retina_subnets(fpn, num_anchors, num_classes):
+def _retina_subnets(fpn, num_anchors, num_classes):
     (p3, p4, p5, p6, p7) = fpn
 
     # TODO Anchors! Section 4
@@ -82,8 +82,8 @@ def retina_subnets(fpn, num_anchors, num_classes):
     outputs = []
 
     for layer in fpn:
-        class_logits = class_subnet(layer, num_anchors, num_classes)
-        box_logits = box_subnet(layer, num_anchors)
+        class_logits = _class_subnet(layer, num_anchors, num_classes)
+        box_logits = _box_subnet(layer, num_anchors)
 
         outputs.append((class_logits, box_logits))
 
@@ -117,12 +117,12 @@ def retinanet(inputs, target_classes, prior=0.01):
             p7 = tf.nn.relu(p6)
             p7 = tf.layers.conv2d(p7, FEATURE_MAPS_FILTERS, kernel_size=3, strides=2, kernel_initializer=initializer)
 
-            p4 = fpn_top_down_layer(p5, c4)
-            p3 = fpn_top_down_layer(p4, c3)
+            p4 = _fpn_top_down_layer(p5, c4)
+            p3 = _fpn_top_down_layer(p4, c3)
             # p2 = fpn_top_down_layer(p3, c2)  Not actually used in the RetinNet original architecture
 
     with tf.name_scope("retina"):
-        return retina_subnets((p3, p4, p5, p6, p7), 9, 1) ## TODO parameters
+        return _retina_subnets((p3, p4, p5, p6, p7), 9, 1) ## TODO parameters
 
 
 def _focal_loss(logits, target, alpha, gamma, normalizer):
@@ -186,7 +186,7 @@ def predict_box(outputs):
     :param outputs: RetinaNet's FPN heads - batch classification and bounding box predictions per an FPN level
     :return: probability and bounding box per batch element
     """
-    batch_size = batch_size_of_output(outputs)
+    batch_size = _batch_size_of_output(outputs)
     batch_size = tf.to_int32(batch_size)
 
     max_prob = tf.zeros(shape=[batch_size, 1])
@@ -194,9 +194,9 @@ def predict_box(outputs):
     # print(max_prob)
     # print(max_box)
 
-    # debug_argmax_and_gather()
-    # debug_boxes()
-    # debug_classes()
+    # _debug_argmax_and_gather()
+    # _debug_boxes()
+    # _debug_classes()
 
     batch_size = tf.to_int64(batch_size)
     batch_range = tf.range(batch_size)
@@ -206,12 +206,12 @@ def predict_box(outputs):
 
         indices = tf.argmax(class_outputs, axis=-1)
 
-        class_indices = batch_class_indices(batch_range, indices)
+        class_indices = _batch_class_indices(batch_range, indices)
         classification = tf.gather_nd(class_outputs, class_indices)
         classification = tf.reshape(classification, shape=[tf.shape(classification)[0], 1])
         # print(classification)
 
-        box_indices = batch_box_indices(batch_range, indices)
+        box_indices = _batch_box_indices(batch_range, indices)
         box = tf.gather_nd(box_outputs, box_indices)
         # print(box)
 
@@ -223,11 +223,11 @@ def predict_box(outputs):
     return max_prob, max_box
 
 
-def batch_class_indices(batch_range, indices):
+def _batch_class_indices(batch_range, indices):
     return tf.stack([batch_range, indices], axis=-1)
 
 
-def batch_box_indices(batch_range, class_indices):
+def _batch_box_indices(batch_range, class_indices):
     indices = tf.multiply(class_indices, 4)
 
     box_indices_x = tf.stack([batch_range, indices], axis=-1)
@@ -239,7 +239,7 @@ def batch_box_indices(batch_range, class_indices):
     return box_indices
 
 
-def batch_size_of_output(output):
+def _batch_size_of_output(output):
     fpn_head = output[0]
     fpn_classification = fpn_head[0]
     first_dimension = tf.shape(fpn_classification)[0]
@@ -247,7 +247,7 @@ def batch_size_of_output(output):
     return batch_size
 
 
-def debug_argmax_and_gather():
+def _debug_argmax_and_gather():
 
     # WORKING solution based on https://stackoverflow.com/questions/45836241/tensorflow-tf-argmax-and-slicing
     x = [[ 1,2,3,4,3,2,1],
@@ -260,12 +260,12 @@ def debug_argmax_and_gather():
     print(tf.gather_nd(x, indices).eval())
 
 
-def debug_boxes():
+def _debug_boxes():
     boxes = [ [1, 2, 10, 10,    2, 3, 20, 20,   4, 5, 30, 30],
               [2, 3, 20, 20,    1, 2, 10, 10,   4, 5, 30, 30],
               [4, 5, 30, 30,    1, 2, 10, 10,   2, 3, 20, 20]]
 
-    box_indices = batch_box_indices(tf.range(3), [2, 0, 1])
+    box_indices = _batch_box_indices(tf.range(3), [2, 0, 1])
     print(box_indices)
     print(box_indices.eval())
 
@@ -274,12 +274,12 @@ def debug_boxes():
     print(boxes.eval())
 
 
-def debug_classes():
+def _debug_classes():
     classes = [[1, 2, 4],
                [2, 1, 4],
                [4, 1, 2]]
 
-    class_indices = batch_class_indices(tf.range(3), [2, 2, 0])
+    class_indices = _batch_class_indices(tf.range(3), [2, 2, 0])
     classes = tf.gather_nd(classes, class_indices)
     print(classes)
     print(classes.eval())
