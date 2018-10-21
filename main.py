@@ -1,11 +1,12 @@
 import os
+from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
 import pydicom
 import tensorflow as tf
 
-from RetinaNet import retinanet, retina_loss
+from RetinaNet import retinanet, retina_loss, predict_box
 
 FILE_TRAIN_IMAGES = "data/stage_1_train_images.zip"
 FILE_TRAIN_LABELS = "data/stage_1_train_labels.zip"
@@ -59,25 +60,17 @@ def generate_training_data(images, labels):
             yield (pixels, (x, y, width, height, label))
 
 
-def generate_test_data(images):
+def generate_kaggle_test_data(images):
     for (patientId, pixels) in images:
-        yield pixels
+        yield patientId, pixels
 
 
 # TODO consider image augmentation as in the ResNet paper section 3.4 Implementation
 # TODO use weight decay of 0.0001 and momentum of 0.9
 
+
 def main(argv):
-    # entries = np.array([entry for entry in test_generator])
-    train_labels = pd.read_csv("data/stage_1_train_labels.csv")
-
-    train_data_dir = extract_data(FILE_TRAIN_IMAGES, TMP_DIR_TRAIN)
-    train_data_generator = generate_training_data(read_images(train_data_dir), train_labels)
-
-    train_dtype = (tf.uint8, (tf.float32, tf.float32, tf.float32, tf.float32, tf.uint8))
-    train_dataset = tf.data.Dataset\
-        .from_generator(lambda: train_data_generator, train_dtype)\
-        .batch(BATCH_SIZE)
+    train_dataset = make_train_dataset()
     iterator = tf.data.Iterator.from_structure(train_dataset.output_types, train_dataset.output_shapes)
     iterator_init_op = iterator.make_initializer(train_dataset)
 
@@ -94,33 +87,78 @@ def main(argv):
     minimize = optimizer.minimize(loss)
     init = tf.global_variables_initializer()
 
+    # with tf.Session() as sess:
+    #     sess.run(init)
+    #     for epoch in range(EPOCHS):
+    #         print(f"EPOCH_{epoch}: ")
+    #         sess.run(iterator_init_op)
+    #         counter = 0
+    #         while True:
+    #             try:
+    #                 batch = sess.run(iterator.get_next())
+    #                 (x, y, width, height, label) = batch[1]
+    #                 batch_pixels = np.array(batch[0]).reshape(-1, 1024, 1024, 1)
+    #                 batch_classes = np.array(label).reshape(-1, 1)
+    #                 batch_boxes = np.array([x, y, width, height]).reshape(-1, 4)
+    #
+    #                 sess.run(minimize, feed_dict={pixels: batch_pixels,
+    #                                               target_boxes: batch_boxes,
+    #                                               target_class: batch_classes})
+    #
+    #                 counter += 1
+    #                 print(f"{epoch} -> {counter}")
+    #                 # TMP TODO
+    #                 break
+    #             except tf.errors.OutOfRangeError:
+    #                 break
+
+    kaggle_test_dataset = make_kaggle_dataset()
+    iterator = tf.data.Iterator.from_structure(kaggle_test_dataset.output_types, kaggle_test_dataset.output_shapes)
+    iterator_init_op = iterator.make_initializer(kaggle_test_dataset)
+    kaggle_predictions = []
+
     with tf.Session() as sess:
-        sess.run(init)
-        for epoch in range(EPOCHS):
-            print(f"EPOCH_{epoch}: ")
-            sess.run(iterator_init_op)
-            counter = 0
-            while True:
-                try:
-                    batch = sess.run(iterator.get_next())
-                    (x, y, width, height, label) = batch[1]
-                    batch_pixels = np.array(batch[0]).reshape(-1, 1024, 1024, 1)
-                    batch_classes = np.array(label).reshape(-1, 1)
-                    batch_boxes = np.array([x, y, width, height]).reshape(-1, 4)
+        sess.run(tf.global_variables_initializer())
+        sess.run(iterator_init_op)
+        batch_index = 1
+        while True:
+            try:
+                print(f"Processing batch {batch_index}...")
+                batch = sess.run(iterator.get_next())
+                patient_id = batch[0]
+                batch_pixels = np.array(batch[1]).reshape(-1, 1024, 1024, 1)
+                box_prediction = sess.run(predict_box(outputs), feed_dict={pixels: batch_pixels})
+                kaggle_predictions.append({"patientId": patient_id, "PredictionString": box_prediction})
 
-                    sess.run(minimize, feed_dict={pixels: batch_pixels,
-                                                  target_boxes: batch_boxes,
-                                                  target_class: batch_classes})
+                total = sess.run(batch_index * tf.shape(patient_id)[0])
+                print(f"Total processed: {total}")
+                batch_index += 1
+            except tf.errors.OutOfRangeError:
+                break
 
-                    counter += 1
-                    print(f"{epoch} -> {counter}")
-                except tf.errors.OutOfRangeError:
-                    pass
+    df = pd.DataFrame(kaggle_predictions)
+    df.to_csv("data/submission.csv")
 
-    test_dtype = (tf.uint8)
-    test_data_dir = extract_data(FILE_TEST_IMAGES, TMP_DIR_TEST)
-    test_data_generator = generate_test_data(read_images(test_data_dir))
-    test_dataset = tf.data.Dataset.from_generator(lambda: test_data_generator, test_dtype)
+
+def make_train_dataset():
+    train_labels = pd.read_csv("data/stage_1_train_labels.csv")
+
+    train_data_dir = extract_data(FILE_TRAIN_IMAGES, TMP_DIR_TRAIN)
+    train_data_generator = generate_training_data(read_images(train_data_dir), train_labels)
+
+    train_dtype = (tf.uint8, (tf.float32, tf.float32, tf.float32, tf.float32, tf.uint8))
+    return tf.data.Dataset \
+        .from_generator(lambda: train_data_generator, train_dtype) \
+        .batch(BATCH_SIZE)
+
+
+def make_kaggle_dataset():
+    kaggle_dtype = (tf.string, tf.uint8)
+    kaggle_data_dir = extract_data(FILE_TEST_IMAGES, TMP_DIR_TEST)
+    kaggle_data_generator = generate_kaggle_test_data(read_images(kaggle_data_dir))
+    return tf.data.Dataset\
+        .from_generator(lambda: kaggle_data_generator, kaggle_dtype)\
+        .batch(3)
 
 
 if __name__ == '__main__':

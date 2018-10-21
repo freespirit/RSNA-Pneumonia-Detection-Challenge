@@ -2,6 +2,8 @@ import math
 
 import tensorflow as tf
 
+import numpy as np
+
 from ResNet101 import resnet_101
 
 FEATURE_MAPS_FILTERS = 256
@@ -123,7 +125,7 @@ def retinanet(inputs, target_classes, prior=0.01):
         return retina_subnets((p3, p4, p5, p6, p7), 9, 1) ## TODO parameters
 
 
-def focal_loss(logits, target, alpha, gamma, normalizer):
+def _focal_loss(logits, target, alpha, gamma, normalizer):
     """
     Focal loss function - extension of Cross Entropy as described in "Focal Loss for Dense Object Detection"
     (arXiv:1708.02002v2 [cs.CV] 7 Feb 2018)
@@ -135,8 +137,7 @@ def focal_loss(logits, target, alpha, gamma, normalizer):
     # FL(pt) = − α()(1 − pt)**γ) * log(pt) #. (4)
     with tf.name_scope('focal_loss'):
         positive_label_mask = tf.equal(target, 1)
-        cross_entropy = tf.losses.sigmoid_cross_entropy(target, logits)
-        # cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=target, logits=logits)
+        cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=target, logits=logits)
         probs = tf.sigmoid(logits)
         probs_gt = tf.where(positive_label_mask, probs, 1.0 - probs)
         modulator = tf.pow(1.0 - probs_gt, gamma)
@@ -147,13 +148,13 @@ def focal_loss(logits, target, alpha, gamma, normalizer):
     return total_loss
 
 
-def class_loss(class_outputs, target_class, num_positives, alpha=0.5, gamma=2.0):
+def _class_loss(class_outputs, target_class, num_positives, alpha=0.5, gamma=2.0):
     normalizer = num_positives
-    classification_loss = focal_loss(class_outputs, target_class, alpha, gamma, normalizer)
+    classification_loss = _focal_loss(class_outputs, target_class, alpha, gamma, normalizer)
     return classification_loss
 
 
-def bbox_loss(box_outputs, box_targets, num_positives, delta=0.1):
+def _bbox_loss(box_outputs, box_targets, num_positives, delta=0.1):
     normalizer = num_positives * 4.0
     mask = tf.not_equal(box_targets, 0.0)
     box_loss = tf.losses.huber_loss(box_targets, box_outputs, weights=mask, delta=delta, reduction=tf.losses.Reduction.SUM)
@@ -172,11 +173,113 @@ def retina_loss(outputs, target_class, target_box, num_classes=1):
         class_outputs, box_outputs = predictions
 
         target = tf.broadcast_to(target_class, tf.shape(class_outputs))
-        # print(target)
-        class_losses.append(class_loss(class_outputs, target, 1))
+        class_losses.append(_class_loss(class_outputs, target, 1))
 
         target = tf.broadcast_to(target_box, tf.shape(box_outputs))
-        # print(target)
-        box_losses.append(bbox_loss(box_outputs, target, 1))
+        box_losses.append(_bbox_loss(box_outputs, target, 1))
 
     return tf.add_n(class_losses) + tf.add_n(box_losses)
+
+
+def predict_box(outputs):
+    """
+    :param outputs: RetinaNet's FPN heads - batch classification and bounding box predictions per an FPN level
+    :return: probability and bounding box per batch element
+    """
+    batch_size = batch_size_of_output(outputs)
+    batch_size = tf.to_int32(batch_size)
+
+    max_prob = tf.zeros(shape=[batch_size, 1])
+    max_box = tf.zeros(shape=[batch_size, 4])
+    # print(max_prob)
+    # print(max_box)
+
+    # debug_argmax_and_gather()
+    # debug_boxes()
+    # debug_classes()
+
+    batch_size = tf.to_int64(batch_size)
+    batch_range = tf.range(batch_size)
+
+    for predictions in outputs:
+        class_outputs, box_outputs = predictions
+
+        indices = tf.argmax(class_outputs, axis=-1)
+
+        class_indices = batch_class_indices(batch_range, indices)
+        classification = tf.gather_nd(class_outputs, class_indices)
+        classification = tf.reshape(classification, shape=[tf.shape(classification)[0], 1])
+        # print(classification)
+
+        box_indices = batch_box_indices(batch_range, indices)
+        box = tf.gather_nd(box_outputs, box_indices)
+        # print(box)
+
+        mask = tf.greater(classification, max_prob)
+        max_prob = tf.where(mask, classification, max_prob)
+        mask = tf.broadcast_to(mask, tf.shape(box))
+        max_box = tf.where(mask, box, max_box)
+
+    return max_prob, max_box
+
+
+def batch_class_indices(batch_range, indices):
+    return tf.stack([batch_range, indices], axis=-1)
+
+
+def batch_box_indices(batch_range, class_indices):
+    indices = tf.multiply(class_indices, 4)
+
+    box_indices_x = tf.stack([batch_range, indices], axis=-1)
+    box_indices_y = tf.stack([batch_range, tf.add(indices, 1)], axis=-1)
+    box_indices_width = tf.stack([batch_range, tf.add(indices, 2)], axis=-1)
+    box_indices_height = tf.stack([batch_range, tf.add(indices, 3)], axis=-1)
+
+    box_indices = tf.stack([box_indices_x, box_indices_y, box_indices_width, box_indices_height], axis=1)
+    return box_indices
+
+
+def batch_size_of_output(output):
+    fpn_head = output[0]
+    fpn_classification = fpn_head[0]
+    first_dimension = tf.shape(fpn_classification)[0]
+    batch_size = tf.cast(first_dimension, dtype=tf.int32)
+    return batch_size
+
+
+def debug_argmax_and_gather():
+
+    # WORKING solution based on https://stackoverflow.com/questions/45836241/tensorflow-tf-argmax-and-slicing
+    x = [[ 1,2,3,4,3,2,1],
+         [ 2,3,4,3,2,1,0]]
+    indices = tf.argmax(x, axis=-1)
+    print(indices.eval())
+    num_examples = tf.cast(tf.shape(x)[0], dtype=indices.dtype)
+    indices = tf.stack([tf.range(num_examples), indices], axis=-1)
+    # print(tf.gather_nd(x, [[0, 3], [1, 2]]).eval())
+    print(tf.gather_nd(x, indices).eval())
+
+
+def debug_boxes():
+    boxes = [ [1, 2, 10, 10,    2, 3, 20, 20,   4, 5, 30, 30],
+              [2, 3, 20, 20,    1, 2, 10, 10,   4, 5, 30, 30],
+              [4, 5, 30, 30,    1, 2, 10, 10,   2, 3, 20, 20]]
+
+    box_indices = batch_box_indices(tf.range(3), [2, 0, 1])
+    print(box_indices)
+    print(box_indices.eval())
+
+    boxes = tf.gather_nd(boxes, box_indices)
+    print(boxes)
+    print(boxes.eval())
+
+
+def debug_classes():
+    classes = [[1, 2, 4],
+               [2, 1, 4],
+               [4, 1, 2]]
+
+    class_indices = batch_class_indices(tf.range(3), [2, 2, 0])
+    classes = tf.gather_nd(classes, class_indices)
+    print(classes)
+    print(classes.eval())
