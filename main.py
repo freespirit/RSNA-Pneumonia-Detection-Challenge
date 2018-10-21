@@ -127,17 +127,28 @@ def main(argv):
                 batch = sess.run(iterator.get_next())
                 patient_id = batch[0]
                 batch_pixels = np.array(batch[1]).reshape(-1, 1024, 1024, 1)
-                box_prediction = sess.run(predict_box(outputs), feed_dict={pixels: batch_pixels})
-                kaggle_predictions.append({"patientId": patient_id, "PredictionString": box_prediction})
 
-                total = sess.run(batch_index * tf.shape(patient_id)[0])
-                print(f"Total processed: {total}")
+                probability, box = sess.run(predict_box(outputs), feed_dict={pixels: batch_pixels})
+
+                df_prob = pd.DataFrame(probability, columns=['probability'])
+                df_box = pd.DataFrame(box, columns=['x', 'y', 'width', 'height'])
+                df_prediction = pd.concat([df_prob, df_box], axis=1)
+                df = pd.DataFrame(patient_id, columns=['patientId'])
+                df['PredictionString'] = df_prediction.iloc[:, :].apply(lambda x: " ".join(x.map('{:.4f}'.format)), axis=1)
+                kaggle_predictions.append(df)
+
+                total_processed = sess.run(batch_index * tf.shape(patient_id)[0])
+                print(f"Total test images processed: {total_processed}")
                 batch_index += 1
+
+                if batch_index > 2:  # TODO TMP
+                    break
             except tf.errors.OutOfRangeError:
                 break
 
-    df = pd.DataFrame(kaggle_predictions)
-    df.to_csv("data/submission.csv")
+    df = pd.concat(kaggle_predictions)
+    print(df)
+    df.to_csv("data/submission.csv", index=False)
 
 
 def make_train_dataset():
@@ -156,8 +167,8 @@ def make_kaggle_dataset():
     kaggle_dtype = (tf.string, tf.uint8)
     kaggle_data_dir = extract_data(FILE_TEST_IMAGES, TMP_DIR_TEST)
     kaggle_data_generator = generate_kaggle_test_data(read_images(kaggle_data_dir))
-    return tf.data.Dataset\
-        .from_generator(lambda: kaggle_data_generator, kaggle_dtype)\
+    return tf.data.Dataset \
+        .from_generator(lambda: kaggle_data_generator, kaggle_dtype) \
         .batch(3)
 
 
