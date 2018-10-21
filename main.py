@@ -27,8 +27,8 @@ def extract_data(data_filename, dir="data"):
     """
     target_dir = os.path.join(TMP_DATASET_DIR, dir)
 
-    # with ZipFile(data_filename) as dataset:
-    #     dataset.extractall(path=target_dir)
+    with ZipFile(data_filename) as dataset:
+        dataset.extractall(path=target_dir)
     print("INFO: RSNA dataset extracted to tmp dir ", target_dir)
 
     return target_dir
@@ -71,60 +71,62 @@ def generate_kaggle_test_data(images):
 
 def main(argv):
     train_dataset = make_train_dataset()
-    iterator = tf.data.Iterator.from_structure(train_dataset.output_types, train_dataset.output_shapes)
-    iterator_init_op = iterator.make_initializer(train_dataset)
+    iterator = train_dataset.make_initializable_iterator()
+    iterator_init_op = iterator.initializer
 
     pixels = tf.placeholder(dtype=tf.float32, shape=[None, 1024, 1024, 1])
     target_class = tf.placeholder(dtype=tf.uint8, shape=[None, 1], name="classs")
     target_boxes = tf.placeholder(dtype=tf.float32, shape=[None, 4], name="anchor_box")
 
-    # pixels = tf.reshape(pixels, [None, 1024, 1024, 1])
+    inputs = tf.image.resize_images(pixels, [640, 640])
     inputs = tf.image.grayscale_to_rgb(pixels)
     outputs = retinanet(inputs, 1)
     loss = retina_loss(outputs, target_class, target_boxes)
 
     optimizer = tf.train.AdamOptimizer()
     minimize = optimizer.minimize(loss)
-    init = tf.global_variables_initializer()
 
-    # with tf.Session() as sess:
-    #     sess.run(init)
-    #     for epoch in range(EPOCHS):
-    #         print(f"EPOCH_{epoch}: ")
-    #         sess.run(iterator_init_op)
-    #         counter = 0
-    #         while True:
-    #             try:
-    #                 batch = sess.run(iterator.get_next())
-    #                 (x, y, width, height, label) = batch[1]
-    #                 batch_pixels = np.array(batch[0]).reshape(-1, 1024, 1024, 1)
-    #                 batch_classes = np.array(label).reshape(-1, 1)
-    #                 batch_boxes = np.array([x, y, width, height]).reshape(-1, 4)
-    #
-    #                 sess.run(minimize, feed_dict={pixels: batch_pixels,
-    #                                               target_boxes: batch_boxes,
-    #                                               target_class: batch_classes})
-    #
-    #                 counter += 1
-    #                 print(f"{epoch} -> {counter}")
-    #                 # TMP TODO
-    #                 break
-    #             except tf.errors.OutOfRangeError:
-    #                 break
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+
+        writer = tf.summary.FileWriter("/tmp/rsna_model", sess.graph)
+        writer.close()
+
+        for epoch in range(EPOCHS):
+            print(f"EPOCH_{epoch}: ")
+            sess.run(iterator_init_op)
+            batch_index = 1
+            while True:
+                try:
+                    batch = sess.run(iterator.get_next())
+                    (x, y, width, height, label) = batch[1]
+                    batch_pixels = np.array(batch[0]).reshape(-1, 1024, 1024, 1)
+                    batch_classes = np.array(label).reshape(-1, 1)
+                    batch_boxes = np.array([x, y, width, height]).reshape(-1, 4)
+
+                    sess.run(minimize, feed_dict={pixels: batch_pixels,
+                                                  target_boxes: batch_boxes,
+                                                  target_class: batch_classes})
+
+                    print(f"{epoch} -> {batch_index}")
+                    batch_index += 1
+                except tf.errors.OutOfRangeError:
+                    print(f"Out of range with count: {counter}")
+                    break
 
     kaggle_test_dataset = make_kaggle_dataset()
-    iterator = tf.data.Iterator.from_structure(kaggle_test_dataset.output_types, kaggle_test_dataset.output_shapes)
-    iterator_init_op = iterator.make_initializer(kaggle_test_dataset)
+    kaggle_iterator = kaggle_test_dataset.make_initializable_iterator()
+    kaggle_iterator_init_op = kaggle_iterator.initializer
     kaggle_predictions = []
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        sess.run(iterator_init_op)
+        sess.run(kaggle_iterator_init_op)
         batch_index = 1
         while True:
             try:
                 print(f"Processing batch {batch_index}...")
-                batch = sess.run(iterator.get_next())
+                batch = sess.run(kaggle_iterator.get_next())
                 patient_id = batch[0]
                 batch_pixels = np.array(batch[1]).reshape(-1, 1024, 1024, 1)
 
@@ -141,8 +143,6 @@ def main(argv):
                 print(f"Total test images processed: {total_processed}")
                 batch_index += 1
 
-                if batch_index > 2:  # TODO TMP
-                    break
             except tf.errors.OutOfRangeError:
                 break
 
@@ -169,7 +169,7 @@ def make_kaggle_dataset():
     kaggle_data_generator = generate_kaggle_test_data(read_images(kaggle_data_dir))
     return tf.data.Dataset \
         .from_generator(lambda: kaggle_data_generator, kaggle_dtype) \
-        .batch(3)
+        .batch(BATCH_SIZE)
 
 
 if __name__ == '__main__':
