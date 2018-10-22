@@ -19,7 +19,7 @@ def _fpn_top_down_layer(top, left):
     :return:
     """
 
-    input_left = tf.layers.conv2d(left, filters=FEATURE_MAPS_FILTERS, kernel_size=1, strides=1)
+    input_left = tf.layers.conv2d(left, filters=FEATURE_MAPS_FILTERS, kernel_size=1, strides=1, padding='same')
     new_size = [top.shape[1] * 2, top.shape[2] * 2]
     input_top = tf.image.resize_nearest_neighbor(top, new_size)
     output = tf.add(input_left, input_top)
@@ -111,11 +111,19 @@ def retinanet(inputs, target_classes, prior=0.01):
 
         with tf.name_scope('top-down'):
             initializer = tf.initializers.random_normal(stddev=0.01)
-            p5 = tf.layers.conv2d(c5, FEATURE_MAPS_FILTERS, kernel_size=1, strides=1)
-            p6 = tf.layers.conv2d(c5, FEATURE_MAPS_FILTERS, kernel_size=3, strides=2, kernel_initializer=initializer)
+            p5 = tf.layers.conv2d(c5, FEATURE_MAPS_FILTERS, kernel_size=1, strides=1, padding='same')
+            p6 = tf.layers.conv2d(c5, FEATURE_MAPS_FILTERS,
+                                  kernel_size=3,
+                                  strides=2,
+                                  padding='same',
+                                  kernel_initializer=initializer)
 
             p7 = tf.nn.relu(p6)
-            p7 = tf.layers.conv2d(p7, FEATURE_MAPS_FILTERS, kernel_size=3, strides=2, kernel_initializer=initializer)
+            p7 = tf.layers.conv2d(p7, FEATURE_MAPS_FILTERS,
+                                  kernel_size=3,
+                                  strides=2,
+                                  padding='same',
+                                  kernel_initializer=initializer)
 
             p4 = _fpn_top_down_layer(p5, c4)
             p3 = _fpn_top_down_layer(p4, c3)
