@@ -9,7 +9,7 @@ The goal is to detect regions of <b>chest radiograph</b> images that could sugge
 The task sounds very similar to object detection so it may be a good idea to experiment with state of the art object detection models.
 
 ### EDA
-Of course, it's best to start with some exploratory data analysis. Some graphs and stats could be found in `eda.py` - it's a simple python file. It's run in `Atom` with `Hydrogen` for simplicity and faster iteration as well as history tracking.
+Of course, it's best to start with some exploratory data analysis. Some graphs and stats could be found in `eda.py` - it's a simple python file. It's run in `Atom` with [`Hydrogen`](https://atom.io/packages/hydrogen) for simplicity and faster iteration as well as history tracking.
 
 ### Model
 The precision is more important than speed in this task. Probably even in a real-world application of the model for similar task higher frames per second wouldn't be as important as the precision. Therefore it's better to use more accurate than faster model. As such, `RetinaNet` would be the first choice.
