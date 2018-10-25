@@ -81,12 +81,11 @@ def main(argv):
     target_boxes = tf.placeholder(dtype=tf.float32, shape=[None, 4], name="anchor_box")
 
     inputs = pixels
-    inputs = tf.image.resize_images(inputs, [640, 640], method=ResizeMethod.NEAREST_NEIGHBOR)
     inputs = tf.image.grayscale_to_rgb(inputs)
     outputs = retinanet(inputs, 1)
     loss = retina_loss(outputs, target_class, target_boxes)
 
-    optimizer = tf.train.AdamOptimizer()
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.08)
     minimize = optimizer.minimize(loss)
 
     with tf.Session() as sess:
