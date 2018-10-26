@@ -16,15 +16,15 @@ The input is an archive of `DICOM` files. Once extracted, the files can be easil
 
 #### Bounding boxes
 The distribution of the bounding boxes' coordinates has roughly the shape of lungs, which is probably expected.
-(__todo__ histograms here)
+![Box coordinates](screenshots/box_coordinates.png)
 
 Width and height distributions are not very interesting but they may give an idea of what to expect from the model (as an output):
-(__todo__ histograms here)
+![Box shapes](screenshots/box_shapes.png)
 
 The last histogram shows the distribution of the ratios (`height / width`). It looks interesting that a lot of the boxes are of square shape. Most of the boxes have aspect ratio in the range [1, 2].
 
-Exploring the distribution of the positive and negative samples shows that there aren't as many positive samples, which could probably make it harder for the model to predict the bounding boxes.
-(__todo__ histograms here)
+Exploring the number of positive and negative samples shows that there aren't as many positive samples, which could probably make it harder for the model to predict the bounding boxes.
+![Samples](screenshots/samples.png)
 
 Positive: 8964
 Negative: 20025
