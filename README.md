@@ -24,10 +24,14 @@ The distribution of the bounding boxes' coordinates has roughly the shape of lun
 Width and height distributions are not very interesting but they may give an idea of what to expect from the model (as an output):
 
 <p align="center">
-  <img width="600" src="https://github.com/freespirit/RSNA-Pneumonia-Detection-Challenge/blob/master/screenshots/box_shapes.png"/>
+  <img width="600" src="https://github.com/freespirit/RSNA-Pneumonia-Detection-Challenge/blob/master/screenshots/box_sides.png"/>
 </p>
 
-The last histogram shows the distribution of the ratios (`height / width`). It looks interesting that a lot of the boxes are of square shape. Most of the boxes have aspect ratio in the range [1, 2].
+The distribution of the ratios (`height / width`) - it looks interesting that a lot of the boxes are of square shape. Most of the boxes have aspect ratio in the range [1, 2].
+
+<p align="center">
+  <img width="600" src="https://github.com/freespirit/RSNA-Pneumonia-Detection-Challenge/blob/master/screenshots/box_shapes.png"/>
+</p>
 
 Exploring the number of positive and negative samples shows that there aren't as many positive samples, which could probably make it harder for the model to predict the bounding boxes.
 
