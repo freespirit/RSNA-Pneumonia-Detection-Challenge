@@ -46,3 +46,17 @@ Negative: 20025
 The precision is more important than speed in this task. Probably even in a real-world application of the model for similar task higher frames per second wouldn't be as important as the precision. Therefore it's better to use more accurate than faster model. As such, `RetinaNet` would be the first choice.
 
 The implementation of the model is based on "Focal Loss for Dense Object Detection" (arXiv:1708.02002v2 \[cs.CV\] 7 Feb 2018)
+
+### Results
+By the end of the challenge the model can't be used for meaningful predictions. The main reason to fail is the predominant focus on the model’s architecture. This lead to spending less time on the pipeline, predictions and loss. By the time the architecture was ready it turned out it’s too heavy and slow to iterate, which made experiments a lot harder.
+
+Yet, the main reason to join the challenge was the practical experience with Tensorflow. The plan was to get in the depths of TF by implementing a SOTA model. From this perspective, the work on the challenge was very useful and productive and fulfilled its goal.
+
+Key __takeaway__:
+It's better to start with the pipeline, e.g. input and output functions, as well as the output (predictions) of the model and the loss function. Those should be "connected" with a small and fast model used just to confirm the structure of the whole project and the proper flow of data. Then, the model can be extended or replaced with a more complicated one. Of course, subsets of the input can (and should) be used for faster iterations and experiments with the proper model.
+
+
+To better understand the model (RetinaNet):
+ 1. “Focal Loss for Dense Object Detection” - arXiv:1708.02002v2 [cs.CV] 7 Feb 2018
+ 2. “Feature Pyramid Networks for Object Detection" - arXiv:1612.03144v2 [cs.CV] 19 Apr 2017
+ 3. “Deep Residual Learning for Image Recognition” - arXiv:1512.03385v1 [cs.CV] 10 Dec 2015
